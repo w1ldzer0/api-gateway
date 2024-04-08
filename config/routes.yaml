@@ -1,0 +1,9 @@
+request:
+    resource: ../src/Action/
+    type: attribute
+    prefix: '/{req}'
+    requirements:
+        req: ".*"
+    name_prefix: ''
+    trailing_slash_on_root: false
+    format: 'json'

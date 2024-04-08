@@ -1,0 +1,13 @@
+nelmio_api_doc:
+    media-types: [
+        'application/json',
+        'multipart/form-data'
+    ]
+    documentation:
+        info:
+            title: CRUD User Service
+            description: This is CRUD user Service
+            version: '1.0'
+    areas:
+        path_patterns:
+            - ^/

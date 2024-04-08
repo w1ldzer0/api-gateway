@@ -1,0 +1,199 @@
+
+variables:
+  IMAGE: ${HARBOR_HOST}/${HARBOR_PROJECT}/${CI_PROJECT_TITLE}:${CI_ENVIRONMENT_NAME}_$CI_COMMIT_SHORT_SHA
+
+stages:
+  - code-review
+  - build
+  - test
+  - deploy
+
+.code-review:build:
+  stage: code-review
+  image:
+    name: php:8.1.0-fpm
+  artifacts:
+    name: "$CI_COMMIT_REF_NAME"
+    paths:
+      - ./
+    expire_in: 5 mins
+  before_script:
+    - touch /usr/local/etc/php/php.ini
+    - pear config-set php_ini /usr/local/etc/php/php.ini
+    - apt-get update && apt-get install -y zip unzip git libmpdec-dev librabbitmq-dev
+    - curl --silent --show-error https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - pecl install decimal amqp
+  script:
+    - composer install --prefer-dist --no-scripts --no-interaction
+    - php ./vendor/bin/php-cs-fixer fix --dry-run --diff
+  tags:
+    - dev1
+  allow_failure: true
+
+.code-review:code-style:
+  stage: code-review
+  image:
+    name: php:8.1.0-fpm
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - php ./vendor/bin/php-cs-fixer fix --dry-run --diff
+  needs:
+    - code-review:build
+  tags:
+    - dev1
+  allow_failure: true
+
+build-dev:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.9.0-debug
+    entrypoint: [""]
+  variables:
+    DOCKER_HOST: tcp://localhost:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - cat $REGISTRY_AUTH > /kaniko/.docker/config.json
+    - export DOCKER_HOST="tcp://localhost:2375"
+  script:
+    - echo "$env_file" > .env
+    - echo "$public" > config/jwt/public.pem
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/docker/php/Dockerfile"
+      --destination "${IMAGE}"
+      --build-arg ENV="dev"
+  environment:
+    name: dev1
+  tags:
+    - dev1
+  except:
+    - main
+
+
+.build-prod:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.9.0-debug
+    entrypoint: [""]
+  variables:
+    DOCKER_HOST: tcp://localhost:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - cat $REGISTRY_AUTH > /kaniko/.docker/config.json
+    - export DOCKER_HOST="tcp://localhost:2375"
+  script:
+    - echo "$env_file" > .env
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/docker/php/Dockerfile"
+      --destination "${IMAGE}"
+  environment:
+    name: prod
+  tags:
+    - prod
+  except:
+    - main
+
+
+deploy-dev:dev1:
+  stage: deploy
+  image:
+    name: dtzar/helm-kubectl:3.10
+  variables:
+    CHART_NAME: ${CI_PROJECT_TITLE}
+    NAMESPACE: development-1
+  before_script:
+    - mkdir ~/.kube
+    - cat $K8S_CR > ~/.kube/config
+    - sed -i "s|CHART_NAME|${CHART_NAME}|g" k8s-helm/Chart.yaml
+  script:
+    - echo "$env_file" > .env
+    - kubectl create secret generic --namespace ${NAMESPACE} ${CI_PROJECT_TITLE} --save-config --dry-run=client --from-file=.env -o yaml | kubectl apply -f -
+    - helm upgrade --install --namespace ${NAMESPACE} --set deployment.image=${IMAGE} $CHART_NAME k8s-helm/
+  needs:
+    - build-dev
+  environment:
+    name: dev1
+  tags:
+    - dev1
+  except:
+    - main
+  when: manual
+
+.deploy-dev:dev2:
+  stage: deploy
+  image:
+    name: dtzar/helm-kubectl:3.10
+  variables:
+    CHART_NAME: ${CI_PROJECT_TITLE}
+    NAMESPACE: development-2
+  before_script:
+    - mkdir ~/.kube
+    - cat $K8S_CR > ~/.kube/config
+    - sed -i "s|CHART_NAME|${CHART_NAME}|g" k8s-helm/Chart.yaml
+  script:
+    - echo "$env_file" > .env
+    - kubectl create secret generic --namespace ${NAMESPACE} ${CI_PROJECT_TITLE} --save-config --dry-run=client --from-file=.env -o yaml | kubectl apply -f -
+    - helm upgrade --install --namespace ${NAMESPACE} --set deployment.image=${IMAGE} $CHART_NAME k8s-helm/
+  needs:
+    - build-dev
+  environment:
+    name: dev2
+  tags:
+    - dev2
+  except:
+    - main
+  when: manual
+
+.deploy-dev:stage:
+  stage: deploy
+  image:
+    name: dtzar/helm-kubectl:3.10
+  variables:
+    CHART_NAME: ${CI_PROJECT_TITLE}
+    NAMESPACE: staging
+  before_script:
+    - mkdir ~/.kube
+    - cat $K8S_CR > ~/.kube/config
+    - sed -i "s|CHART_NAME|${CHART_NAME}|g" k8s-helm/Chart.yaml
+  script:
+    - echo "$env_file" > .env
+    - kubectl create secret generic --namespace ${NAMESPACE} ${CI_PROJECT_TITLE} --save-config --dry-run=client --from-file=.env -o yaml | kubectl apply -f -
+    - helm upgrade --install --namespace ${NAMESPACE} --set deployment.image=${IMAGE} $CHART_NAME k8s-helm/
+  needs:
+    - build-dev
+  environment:
+    name: staging
+  tags:
+    - staging
+  except:
+    - main
+  when: manual
+
+.deploy-prod:
+  stage: deploy
+  image:
+    name: dtzar/helm-kubectl:3.10
+  variables:
+    CHART_NAME: ${CI_PROJECT_TITLE}
+    NAMESPACE: deploy-production
+  before_script:
+    - mkdir ~/.kube
+    - cat $K8S_CR > ~/.kube/config
+    - sed -i "s|CHART_NAME|${CHART_NAME}|g" k8s-helm/Chart.yaml
+  script:
+    - echo "$env_file" > .env
+    - kubectl create secret generic --namespace ${NAMESPACE} ${CI_PROJECT_TITLE} --save-config --dry-run=client --from-file=.env -o yaml | kubectl apply -f -
+    - helm upgrade --install --namespace ${NAMESPACE} --set deployment.image=${IMAGE} $CHART_NAME k8s-helm/
+  needs:
+    - build-dev
+  environment:
+    name: prod
+  tags:
+    - prod
+  only:
+    - main
+  when: manual

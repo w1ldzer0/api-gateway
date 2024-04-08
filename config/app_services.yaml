@@ -1,0 +1,95 @@
+parameters:
+  app-services:
+    user-service:
+      host: '%env(USER_SERVICE_HOST)%'
+      swagger: '/api/user/doc.json'
+      actual_version: "1.0"
+      routes:
+        offers:
+          pattern: '/users\/offer/'
+          need_user_id: true
+        users:
+          pattern: '/users.*/'
+    auth-service:
+      host: '%env(AUTH_SERVICE_HOST)%'
+      swagger: '/api/auth/doc.json'
+      actual_version: "1.0"
+      routes:
+        jwt-token:
+          pattern: '/jwt-token.*/'
+          auth: false
+        change_email:
+          pattern: '/register\/email/'
+          need_user_id: true
+        verify:
+          pattern: '/register\/verify.*/'
+          need_user_id: true
+        register:
+          pattern: '/register.*/'
+          auth: false
+        auth:
+          pattern: '/auth.*/'
+          auth: false
+    stats-service:
+      host: '%env(DATA_MANAGER_SERVICE_HOST)%'
+      actual_version: "1.0"
+      routes:
+        common-stat:
+          pattern: '/common-stats/'
+        stat:
+          pattern: '/stats/'
+    billing:
+      host: '%env(BILLING_SERVICE_HOST)%'
+      actual_version: "1.0"
+      routes:
+        payments-link:
+          pattern: '/payments\/link/'
+          need_user_id: true
+        balance:
+          pattern: '/accounts\/account-charts\/.*/'
+          need_user_id: true
+        operations:
+          pattern: '/operations/'
+          need_user_id: true
+        balances:
+          pattern: '/balances\/.*/'
+          need_user_id: true
+    notification:
+      host: '%env(NOTIFICATION_SERVICE_HOST)%'
+      actual_version: "1.0"
+      routes:
+        email:
+          pattern: '/notifications\/email/'
+          auth: false
+    ts-manager:
+      host: '%env(TS_MANAGER_SERVICE_HOST)%'
+      actual_version: "1.0"
+      routes:
+        products:
+          pattern: '/products.*/'
+          need_user_id: true
+        forms:
+          pattern: '/forms.*/'
+        traffic-source:
+          pattern: '/traffic-sources.*/'
+          need_user_id: true
+        trust-professional:
+          pattern: '/trust-professional.*/'
+          need_user_id: true
+        marketplace-promotion:
+          pattern: '/marketplace-promotion.*/'
+          need_user_id: true
+        creative:
+          pattern: '/creatives.*/'
+          need_user_id: true
+        services:
+          pattern: '/services.*/'
+          need_user_id: true
+    file-manager:
+      host: '%env(FILE_MANAGER_SERVICE_HOST)%'
+      actual_version: "1.0"
+      routes:
+        images:
+          pattern: '/images.*/'
+          need_user_id: true
+

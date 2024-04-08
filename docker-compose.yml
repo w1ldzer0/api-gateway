@@ -1,0 +1,40 @@
+version: "3.8"
+services:
+  nginx:
+    image: alfaleads.gitlab.yandexcloud.net:5050/platforma/api-gateway/nginx:${IMAGE_TAG}
+    build:
+      dockerfile: ./docker/nginx/Dockerfile
+      context: .
+    container_name: ${APP_NAME}-nginx
+    volumes:
+      - ./docker/nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf
+      - ./:/var/www/
+    ports:
+      - ${NGINX_PORT}:80
+    depends_on:
+      - php
+    restart: always
+  php:
+    image: alfaleads.gitlab.yandexcloud.net:5050/platforma/api-gateway/php:${IMAGE_TAG}
+    container_name: ${APP_NAME}-php
+    build:
+      dockerfile: ./docker/php/Dockerfile
+      context: .
+    volumes:
+      - ./:/var/www:cached
+    restart: always
+    environment:
+      - XDEBUG_ENABLE
+      - XDEBUG_CLIENT_HOST
+      - XDEBUG_CLIENT_PORT
+      - XDEBUG_MODE
+      - XDEBUG_IDE_KEY
+  redis:
+    container_name: ${APP_NAME}-redis
+    image: redis:latest
+  composer:
+    image: composer:2.3.7
+    container_name: ${APP_NAME}-composer
+    volumes:
+      - ./:/app
+    command: composer install
